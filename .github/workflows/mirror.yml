@@ -1,0 +1,66 @@
+name: mirror-cng
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        include:
+          - repo: certificates
+            tag: v19.5.5
+            digest: sha256:7e5925e281d4999bc6003106d237273005b305db70e96eb017e9e76f777b6b76
+          - repo: cfssl-self-sign
+            tag: v19.5.5
+            digest: sha256:ed0ead4183ad2ae31e7c66fa68da343961b20adfaa291f575c89f2f213cda000
+          - repo: gitaly
+            tag: v19.5.5
+            digest: sha256:55c24ff0d32e2c33ecba63c381577d2639480dacac3a5ac61530a8d841ee8029
+          - repo: gitlab-base
+            tag: v19.5.5
+            digest: sha256:1fc6de931911654589144ead8f1c9bf764fd79d0e584a0a7cd1b5329ab36ba63
+          - repo: gitlab-exporter
+            tag: 17.0.2
+            digest: sha256:28de071bd21b0e7174cca31a1b8e9dfe6137a78f530b1d39d017f0a2c2acf38d
+          - repo: gitlab-kas
+            tag: v19.5.5
+            digest: sha256:73eb87788646d6e53ada6818dc6f82685bc884fb95fd04483ab745a742458631
+          - repo: gitlab-shell
+            tag: v14.58.0
+            digest: sha256:b4c0e16de1ad9e10baa931f9573a066335490afc40c3125fbd71dd463212d2fe
+          - repo: gitlab-sidekiq-ee
+            tag: v19.5.5
+            digest: sha256:8d2923e7ed5ca151346687cb659a83f9969812a99d86cda141b0df65816c50b0
+          - repo: gitlab-toolbox-ee
+            tag: v19.5.5
+            digest: sha256:41c700ed5c395341972a8e198ed544748ea0a7c14fd658842af4aec3103e27d0
+          - repo: gitlab-webservice-ee
+            tag: v19.5.5
+            digest: sha256:947fdf49335c720bfc074fb76b86b49fddeb7a39afb1705f2ed9c4ca20bbb21e
+          - repo: gitlab-workhorse-ee
+            tag: v19.5.5
+            digest: sha256:12f97030bb61531ae9e186c6553b53db0744b2efcc0ef6b844ea502c1f6037d7
+          - repo: kubectl
+            tag: v19.5.5
+            digest: sha256:689b2cd9b63be8699805579c3c80d99ab9b4ce5be84b88c49ac5c3236af69a74
+    steps:
+      - name: Install skopeo
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq skopeo
+      - name: Login to GHCR
+        run: echo "${{ github.token }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Mirror
+        run: |
+          set -euo pipefail
+          skopeo copy --all --preserve-digests --retry-times 5 \
+            "docker://registry.gitlab.com/gitlab-org/build/cng/${{ matrix.repo }}@${{ matrix.digest }}" \
+            "docker://ghcr.io/${{ github.repository_owner }}/cng-mirror/${{ matrix.repo }}:${{ matrix.tag }}"
+          skopeo inspect --override-os linux --override-arch amd64 --format '{{.Digest}}' \
+            "docker://ghcr.io/${{ github.repository_owner }}/cng-mirror/${{ matrix.repo }}:${{ matrix.tag }}"
